@@ -19,7 +19,7 @@
  */
 
 function GeoEngine() {
-    this.version = "0.5";
+    this.version = "0.5.1";
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas = null;
@@ -91,7 +91,7 @@ GeoEngine.prototype.reset = function() {
     }
     cities = this.shuffle(cities);
     this.correctAnswers = 0;
-    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Не ноль - уже хорошо.'];
+    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
     
     this.scale = 1.0;
     this.shiftX = 0;
@@ -100,6 +100,7 @@ GeoEngine.prototype.reset = function() {
     this.mousePressed = false;
     this.mouseMoved = false;
     this.mousePosition = {'x': 0, 'y': 0};
+    this.mouseDownPosition = {'x': 0, 'y': 0};
     this.selected = false;
     this.selectedPoint = {'x': 0.0, 'y': 0.0};
     this.selectedCity = 0;
@@ -107,6 +108,7 @@ GeoEngine.prototype.reset = function() {
     this.selectedAll = 0;
     this.selectedCorrect = false;
     this.finished = false;
+    this.help = false;
     
     this.recenter = true;
 }
@@ -133,24 +135,28 @@ GeoEngine.prototype.onwheel = function(event) {
 }
 
 GeoEngine.prototype.onmousedown = function(event) {
-    this.mousePressed = true;
-    this.mouseMoved = false;
+    this.mouseDownPosition['x'] = event.clientX;
+    this.mouseDownPosition['y'] = event.clientY;
     this.mousePosition['x'] = event.clientX;
     this.mousePosition['y'] = event.clientY;
+    this.mousePressed = true;
+    this.mouseMoved = false;
     return false;
 }
 
 GeoEngine.prototype.onmouseup = function(event) {
-    if (event.button == 0 && !this.mouseMoved) {
+    var equalPoints = this.mouseDownPosition['x'] == event.clientX && this.mouseDownPosition['y'] == event.clientY;
+    if (event.button == 0 && !this.mouseMoved && equalPoints) {
         if (!this.finished) {
             this.selected = true;
-            this.selectedPoint['x'] = (event.clientX - this.shiftX) / this.scale;
-            this.selectedPoint['y'] = (this.height - (event.clientY - this.shiftY)) / this.scale;
         } else {
             if (this.height - event.clientY <= 32 + 32) {
                 this.reset();
             }
+            this.help = true;
         }
+        this.selectedPoint['x'] = (event.clientX - this.shiftX) / this.scale;
+        this.selectedPoint['y'] = (this.height - (event.clientY - this.shiftY)) / this.scale;
     }
     this.mousePressed = false;
     this.mouseMoved = false;
@@ -308,6 +314,14 @@ GeoEngine.prototype.render = function() {
         this.context.closePath();
         this.context.fill();
         this.context.stroke();
+        
+        var dx = position['x'] - this.selectedPoint['x'], dy = position['y'] - this.selectedPoint['y'];
+        var distance = '' + Math.sqrt(dx * dx + dy * dy).toFixed(2);
+        if (this.finished && this.help && distance < 3.0) {
+            this.context.font = '16px monospace';
+            this.context.fillText(cities[i]['name'], x + r * 3.0, y + 4);
+            helpful = true;
+        }
     }
     
     // Draw previous selection
@@ -405,6 +419,8 @@ GeoEngine.prototype.render = function() {
             text_description = this.descriptions[3];
         else if (this.correctAnswers * 10 >= cities.length)
             text_description = this.descriptions[4];
+        else if (this.correctAnswers >= 10)
+            text_description = this.descriptions[6];
         else if (this.correctAnswers > 0)
             text_description = this.descriptions[5];
         else
