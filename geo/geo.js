@@ -48,6 +48,7 @@ GeoEngine.prototype.run = function() {
     this.waterColor = '#a0bac0';
     this.correctCityColor = '#30c010';
     this.incorrectCityColor = '#ff5030';
+    this.previousFrame = Date.now();
     
     document.getElementsByTagName("HTML")[0].addEventListener("wheel", function(event) {
         return self.onwheel(event);
@@ -78,6 +79,47 @@ GeoEngine.prototype.run = function() {
     window.ondragstart = function(event) { return false; };
     window.onselectstart = function(event) { return false; };
     
+    // Prepare data
+    for (var i = 0; i < cities.length; ++i)
+    {
+        var position = this.toPlane(cities[i]);
+        cities[i]['x'] = position['x'];
+        cities[i]['y'] = position['y'];
+    }
+    for (var i = 0; i < lands.length; ++i)
+    {
+        for (var j = 0; j < lands[i].length; ++j)
+        {
+            lands[i][j] = {'lon': lands[i][j][0], 'lat': lands[i][j][1]};
+            var position = this.toPlane(lands[i][j]);
+            lands[i][j]['x'] = position['x'];
+            lands[i][j]['y'] = position['y'];
+        }
+    }
+    for (var i = 0; i < rivers.length; ++i)
+    {
+        for (var j = 0; j < rivers[i].length; ++j)
+        {
+            rivers[i][j] = {'lon': rivers[i][j][0], 'lat': rivers[i][j][1]};
+            var position = this.toPlane(rivers[i][j]);
+            rivers[i][j]['x'] = position['x'];
+            rivers[i][j]['y'] = position['y'];
+        }
+    }
+    for (var i = 0; i < waters.length; ++i)
+    {
+        for (var j = 0; j < waters[i].length; ++j)
+        {
+            waters[i][j] = {'lon': waters[i][j][0], 'lat': waters[i][j][1]};
+            var position = this.toPlane(waters[i][j]);
+            waters[i][j]['x'] = position['x'];
+            waters[i][j]['y'] = position['y'];
+        }
+    }
+    
+    this.answers = new Array(cities.length);
+    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
+    
     this.reset();
     this.onframe();
     
@@ -85,31 +127,27 @@ GeoEngine.prototype.run = function() {
 }
 
 GeoEngine.prototype.reset = function() {
-    this.answers = [];
-    for (var i = 0; i < cities.length; ++i) {
-        this.answers.push(0);
-    }
-    cities = this.shuffle(cities);
+    this.answers.fill(0);
     this.correctAnswers = 0;
-    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
+    this.finished = false;
+    this.help = false;
+    
+    cities = this.shuffle(cities);
     
     this.scale = 1.0;
     this.shiftX = 0;
     this.shiftY = 0;
-    this.previousFrame = Date.now();
     this.mousePressed = false;
     this.mouseMoved = false;
     this.mousePosition = {'x': 0, 'y': 0};
     this.mouseDownPosition = {'x': 0, 'y': 0};
+    this.mousePoint = {'x': 0, 'y': 0};
     this.selected = false;
     this.selectedPoint = {'x': 0.0, 'y': 0.0};
     this.selectedCity = 0;
     this.selectedPreviousCity = -1;
     this.selectedAll = 0;
     this.selectedCorrect = false;
-    this.finished = false;
-    this.help = false;
-    
     this.recenter = true;
 }
 
@@ -135,12 +173,14 @@ GeoEngine.prototype.onwheel = function(event) {
 }
 
 GeoEngine.prototype.onmousedown = function(event) {
-    this.mouseDownPosition['x'] = event.clientX;
-    this.mouseDownPosition['y'] = event.clientY;
-    this.mousePosition['x'] = event.clientX;
-    this.mousePosition['y'] = event.clientY;
-    this.mousePressed = true;
-    this.mouseMoved = false;
+    if (event.button == 0) {
+        this.mouseDownPosition['x'] = event.clientX;
+        this.mouseDownPosition['y'] = event.clientY;
+        this.mousePosition['x'] = event.clientX;
+        this.mousePosition['y'] = event.clientY;
+        this.mousePressed = true;
+        this.mouseMoved = false;
+    }
     return false;
 }
 
@@ -183,6 +223,8 @@ GeoEngine.prototype.onmousemove = function(event) {
             this.mouseMoved = true;
         }
     }
+    this.mousePoint['x'] = (event.clientX - this.shiftX) / this.scale;
+    this.mousePoint['y'] = (this.height - (event.clientY - this.shiftY)) / this.scale;
     return false;
 }
 
@@ -217,9 +259,8 @@ GeoEngine.prototype.render = function() {
     {
         for (var j = 0; j < lands[i].length; ++j)
         {
-            var position = this.toPlane({'lon': lands[i][j][0], 'lat': lands[i][j][1]});
-            var x = this.scale * position['x'];
-            var y = this.scale * position['y'];
+            var x = this.scale * lands[i][j]['x'];
+            var y = this.scale * lands[i][j]['y'];
             y = this.height - y;
             x += this.shiftX;
             y += this.shiftY;
@@ -244,9 +285,8 @@ GeoEngine.prototype.render = function() {
         
         for (var j = 0; j < rivers[i].length; ++j)
         {
-            var position = this.toPlane({'lon': rivers[i][j][0], 'lat': rivers[i][j][1]});
-            var x = this.scale * position['x'];
-            var y = this.scale * position['y'];
+            var x = this.scale * rivers[i][j]['x'];
+            var y = this.scale * rivers[i][j]['y'];
             y = this.height - y;
             x += this.shiftX;
             y += this.shiftY;
@@ -267,9 +307,8 @@ GeoEngine.prototype.render = function() {
     {
         for (var j = 0; j < waters[i].length; ++j)
         {
-            var position = this.toPlane({'lon': waters[i][j][0], 'lat': waters[i][j][1]});
-            var x = this.scale * position['x'];
-            var y = this.scale * position['y'];
+            var x = this.scale * waters[i][j]['x'];
+            var y = this.scale * waters[i][j]['y'];
             y = this.height - y;
             x += this.shiftX;
             y += this.shiftY;
@@ -285,18 +324,26 @@ GeoEngine.prototype.render = function() {
     this.context.closePath();
     
     // Draw cities
+    var r = 2.0;
+    this.context.font = '16px monospace';
     for (var i = 0; i < cities.length; ++i)
     {
-        var position = this.toPlane({'lon': cities[i]['lon'], 'lat': cities[i]['lat']});
-        var x = this.scale * position['x'];
-        var y = this.scale * position['y'];
+        var x = this.scale * cities[i]['x'];
+        var y = this.scale * cities[i]['y'];
         y = this.height - y;
         x += this.shiftX;
         y += this.shiftY;
-        var r = 2.0;
+        
         if (!this.finished) {
-            this.context.strokeStyle = '#707070';
-            this.context.fillStyle = '#707070';
+            var dx = cities[i]['x'] - this.mousePoint['x'], dy = cities[i]['y'] - this.mousePoint['y'];
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < 3.0) {
+                this.context.strokeStyle = '#d0a010';
+                this.context.fillStyle = '#d0a010';
+            } else {
+                this.context.strokeStyle = '#707070';
+                this.context.fillStyle = '#707070';
+            }
         } else {
             if (this.answers[i] == 1) {
                 this.context.strokeStyle = this.correctCityColor;
@@ -315,24 +362,21 @@ GeoEngine.prototype.render = function() {
         this.context.fill();
         this.context.stroke();
         
-        var dx = position['x'] - this.selectedPoint['x'], dy = position['y'] - this.selectedPoint['y'];
-        var distance = '' + Math.sqrt(dx * dx + dy * dy).toFixed(2);
+        var dx = cities[i]['x'] - this.selectedPoint['x'], dy = cities[i]['y'] - this.selectedPoint['y'];
+        var distance = Math.sqrt(dx * dx + dy * dy);
         if (this.finished && this.help && distance < 3.0) {
-            this.context.font = '16px monospace';
             this.context.fillText(cities[i]['name'], x + r * 3.0, y + 4);
-            helpful = true;
         }
     }
     
     // Draw previous selection
     if (!this.finished && this.selectedPreviousCity != -1) {
-        var position = this.toPlane({'lon': cities[this.selectedPreviousCity]['lon'], 'lat': cities[this.selectedPreviousCity]['lat']});
-        var x = this.scale * position['x'];
-        var y = this.scale * position['y'];
+        var city = cities[this.selectedPreviousCity];
+        var x = this.scale * city['x'];
+        var y = this.scale * city['y'];
         y = this.height - y;
         x += this.shiftX;
         y += this.shiftY;
-        var r = 2.0;
         
         if (this.selectedCorrect) {
             this.context.strokeStyle = this.correctCityColor;
@@ -362,12 +406,12 @@ GeoEngine.prototype.render = function() {
     
     // Draw interface
     if (!this.finished && this.selected && this.selectedCity != -1) {
-        var position = this.toPlane({'lon': cities[this.selectedCity]['lon'], 'lat': cities[this.selectedCity]['lat']});
-        var from = {'x': this.shiftX + this.scale * position['x'], 'y': this.shiftY + (this.height - this.scale * position['y'])};
+        var city = cities[this.selectedCity];
+        var from = {'x': this.shiftX + this.scale * city['x'], 'y': this.shiftY + (this.height - this.scale * city['y'])};
         var to = {'x': this.shiftX + this.scale * this.selectedPoint['x'], 'y': this.shiftY + this.height  - this.scale * this.selectedPoint['y']};
         
-        var dx = position['x'] - this.selectedPoint['x'], dy = position['y'] - this.selectedPoint['y'];
-        var distance = '' + Math.sqrt(dx * dx + dy * dy).toFixed(2);
+        var dx = city['x'] - this.selectedPoint['x'], dy = city['y'] - this.selectedPoint['y'];
+        var distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance < 3.0) {
             this.selectedCorrect = true;
