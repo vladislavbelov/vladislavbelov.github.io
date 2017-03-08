@@ -19,7 +19,7 @@
  */
 
 function GeoEngine() {
-    this.version = "0.5.1";
+    this.version = "0.5.2";
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas = null;
@@ -49,7 +49,69 @@ GeoEngine.prototype.run = function() {
     this.correctCityColor = '#30c010';
     this.incorrectCityColor = '#ff5030';
     this.previousFrame = Date.now();
+    this.fdts = [];
+    this.fdtSum = 0.0;
     
+    // Ignore some events
+    window.ondragstart = function(event) { return false; };
+    window.onselectstart = function(event) { return false; };
+    
+    // Prepare data
+    var minX = 10000.0, maxX = -10000.0, minY = 10000.0, maxY = -10000.0;
+    for (var i = 0; i < cities.length; ++i)
+    {
+        var position = this.toPlane(cities[i]);
+        cities[i]['x'] = position['x'];
+        cities[i]['y'] = position['y'];
+        minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+        minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+    }
+    for (var i = 0; i < lands.length; ++i)
+    {
+        for (var j = 0; j < lands[i].length; ++j)
+        {
+            lands[i][j] = {'lon': lands[i][j][0], 'lat': lands[i][j][1]};
+            var position = this.toPlane(lands[i][j]);
+            lands[i][j]['x'] = position['x'];
+            lands[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    for (var i = 0; i < rivers.length; ++i)
+    {
+        for (var j = 0; j < rivers[i].length; ++j)
+        {
+            rivers[i][j] = {'lon': rivers[i][j][0], 'lat': rivers[i][j][1]};
+            var position = this.toPlane(rivers[i][j]);
+            rivers[i][j]['x'] = position['x'];
+            rivers[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    for (var i = 0; i < waters.length; ++i)
+    {
+        for (var j = 0; j < waters[i].length; ++j)
+        {
+            waters[i][j] = {'lon': waters[i][j][0], 'lat': waters[i][j][1]};
+            var position = this.toPlane(waters[i][j]);
+            waters[i][j]['x'] = position['x'];
+            waters[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    
+    this.answers = new Array(cities.length);
+    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
+    
+    this.reset();
+    
+    var projectedWidth = maxX - minX, projectedHeight = maxY - minY;
+    this.scale = Math.max(1.0, Math.min(this.width / projectedWidth, this.height / projectedHeight));
+    
+    // Initializate all event handlers after data
     document.getElementsByTagName("HTML")[0].addEventListener("wheel", function(event) {
         return self.onwheel(event);
     });
@@ -75,59 +137,17 @@ GeoEngine.prototype.run = function() {
         return self.ondblclick(event);
     };
     
-    // Ignore some events
-    window.ondragstart = function(event) { return false; };
-    window.onselectstart = function(event) { return false; };
-    
-    // Prepare data
-    for (var i = 0; i < cities.length; ++i)
-    {
-        var position = this.toPlane(cities[i]);
-        cities[i]['x'] = position['x'];
-        cities[i]['y'] = position['y'];
-    }
-    for (var i = 0; i < lands.length; ++i)
-    {
-        for (var j = 0; j < lands[i].length; ++j)
-        {
-            lands[i][j] = {'lon': lands[i][j][0], 'lat': lands[i][j][1]};
-            var position = this.toPlane(lands[i][j]);
-            lands[i][j]['x'] = position['x'];
-            lands[i][j]['y'] = position['y'];
-        }
-    }
-    for (var i = 0; i < rivers.length; ++i)
-    {
-        for (var j = 0; j < rivers[i].length; ++j)
-        {
-            rivers[i][j] = {'lon': rivers[i][j][0], 'lat': rivers[i][j][1]};
-            var position = this.toPlane(rivers[i][j]);
-            rivers[i][j]['x'] = position['x'];
-            rivers[i][j]['y'] = position['y'];
-        }
-    }
-    for (var i = 0; i < waters.length; ++i)
-    {
-        for (var j = 0; j < waters[i].length; ++j)
-        {
-            waters[i][j] = {'lon': waters[i][j][0], 'lat': waters[i][j][1]};
-            var position = this.toPlane(waters[i][j]);
-            waters[i][j]['x'] = position['x'];
-            waters[i][j]['y'] = position['y'];
-        }
-    }
-    
-    this.answers = new Array(cities.length);
-    this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
-    
-    this.reset();
+    // Run the main loop
     this.onframe();
     
     console.log('GeoEngine v' + this.version + ' successfuly loaded.');
 }
 
 GeoEngine.prototype.reset = function() {
-    this.answers.fill(0);
+    // Use the loop instead of array.fill, because it's not supported by IE (<12)
+    for (var i = 0; i < this.answers.length; ++i) {
+        this.answers[i] = 0;
+    }
     this.correctAnswers = 0;
     this.finished = false;
     this.help = false;
@@ -165,8 +185,8 @@ GeoEngine.prototype.onwheel = function(event) {
     } else if (event.deltaY > 0 && newScale > 1.0) {
         newScale /= 1.1;
     }
-    var focusX = (this.width / 2.0 - this.shiftX) / this.scale;
-    var focusY = (this.height - (this.height / 2.0 - this.shiftY)) / this.scale;
+    var focusX = (this.mousePosition['x'] - this.shiftX) / this.scale;
+    var focusY = (this.height - (this.mousePosition['y'] - this.shiftY)) / this.scale;
     this.shiftX += focusX * (this.scale - newScale);
     this.shiftY -= focusY * (this.scale - newScale);
     this.scale = newScale;
@@ -217,12 +237,12 @@ GeoEngine.prototype.onmousemove = function(event) {
         var movementY = event.clientY - this.mousePosition['y'];
         this.shiftX += movementX;
         this.shiftY += movementY;
-        this.mousePosition['x'] = event.clientX;
-        this.mousePosition['y'] = event.clientY;
         if (movementX != 0 && movementY != 0) {
             this.mouseMoved = true;
         }
     }
+    this.mousePosition['x'] = event.clientX;
+    this.mousePosition['y'] = event.clientY;
     this.mousePoint['x'] = (event.clientX - this.shiftX) / this.scale;
     this.mousePoint['y'] = (this.height - (event.clientY - this.shiftY)) / this.scale;
     return false;
@@ -324,7 +344,9 @@ GeoEngine.prototype.render = function() {
     this.context.closePath();
     
     // Draw cities
-    var r = 2.0;
+    var r = 0.5;
+    var selectScale = 1.6;
+    var wasCovered = false;
     this.context.font = '16px monospace';
     for (var i = 0; i < cities.length; ++i)
     {
@@ -337,9 +359,21 @@ GeoEngine.prototype.render = function() {
         if (!this.finished) {
             var dx = cities[i]['x'] - this.mousePoint['x'], dy = cities[i]['y'] - this.mousePoint['y'];
             var distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < 3.0) {
+            if (distance <= r * selectScale && !wasCovered) {
                 this.context.strokeStyle = '#d0a010';
                 this.context.fillStyle = '#d0a010';
+                
+                this.context.beginPath();
+                this.context.arc(x, y, r * 4.0 * this.scale, 0, 2.0 * Math.PI, false);
+                this.context.closePath();
+                this.context.stroke();
+                this.context.beginPath();
+                this.context.arc(x, y, r * 8.0 * this.scale, 0, 2.0 * Math.PI, false);
+                this.context.closePath();
+                this.context.stroke();
+                
+                // Prevent few selecting rings
+                wasCovered = true;
             } else {
                 this.context.strokeStyle = '#707070';
                 this.context.fillStyle = '#707070';
@@ -357,15 +391,15 @@ GeoEngine.prototype.render = function() {
             }
         }
         this.context.beginPath();
-        this.context.arc(x, y, r, 0, 2.0 * Math.PI, false);
+        this.context.arc(x, y, r * this.scale, 0, 2.0 * Math.PI, false);
         this.context.closePath();
         this.context.fill();
         this.context.stroke();
         
         var dx = cities[i]['x'] - this.selectedPoint['x'], dy = cities[i]['y'] - this.selectedPoint['y'];
         var distance = Math.sqrt(dx * dx + dy * dy);
-        if (this.finished && this.help && distance < 3.0) {
-            this.context.fillText(cities[i]['name'], x + r * 3.0, y + 4);
+        if (this.finished && this.help && distance <= r * selectScale) {
+            this.context.fillText(cities[i]['name'], x + r * 3.0 * this.scale, y + 4);
         }
     }
     
@@ -392,16 +426,16 @@ GeoEngine.prototype.render = function() {
         this.context.stroke();
         
         this.context.beginPath();
-        this.context.arc(x, y, r * 4.0, 0, 2.0 * Math.PI, false);
+        this.context.arc(x, y, r * 4.0 * this.scale, 0, 2.0 * Math.PI, false);
         this.context.closePath();
         this.context.stroke();
         this.context.beginPath();
-        this.context.arc(x, y, r * 8.0, 0, 2.0 * Math.PI, false);
+        this.context.arc(x, y, r * 8.0 * this.scale, 0, 2.0 * Math.PI, false);
         this.context.closePath();
         this.context.stroke();
         
         this.context.font = '16px monospace';
-        this.context.fillText(cities[this.selectedPreviousCity]['name'], x + r * 9.0, y + 4);
+        this.context.fillText(cities[this.selectedPreviousCity]['name'], x + r * 9.0 * this.scale, y + 4);
     }
     
     // Draw interface
@@ -413,7 +447,7 @@ GeoEngine.prototype.render = function() {
         var dx = city['x'] - this.selectedPoint['x'], dy = city['y'] - this.selectedPoint['y'];
         var distance = Math.sqrt(dx * dx + dy * dy);
         
-        if (distance < 3.0) {
+        if (distance <= r * selectScale) {
             this.selectedCorrect = true;
             this.answers[this.selectedAll] = 1;
             ++this.correctAnswers;
@@ -443,10 +477,14 @@ GeoEngine.prototype.render = function() {
         this.context.fillText(text, (this.width - size.width) / 2, 64 + 32);
         
         this.context.font = '16px monospace';
+        this.context.fillStyle = '#00a0ff';
         var text_task = 'Найдите город и нажмите на него.';
         var size_task = this.context.measureText(text_task);
-        this.context.fillStyle = '#00a0ff';
         this.context.fillText(text_task, (this.width - size_task.width) / 2, 64 - 8);
+        
+        var text_help = 'Используйте колёсико мыши, чтобы приблизиться к городу, а так же левую кнопку мыши для передвижения по карте.';
+        var size_help = this.context.measureText(text_help);
+        this.context.fillText(text_help, (this.width - size_help.width) / 2, this.height - 32 - 16);
     }
     
     if (this.finished) {
@@ -523,7 +561,14 @@ GeoEngine.prototype.render = function() {
     this.context.fillStyle = '#000000';
     var currentFrame = Date.now();
     this.context.font = '12px monospace';
-    this.context.fillText('fdt: ' + (currentFrame - this.previousFrame) + 'ms', 10, 10 + 12 + 20);
+    var fdt = (currentFrame - this.previousFrame);
+    this.fdts.push(fdt);
+    this.fdtSum += fdt;
+    if (this.fdts.length > 20) {
+        this.fdtSum -= this.fdts.shift();
+    }
+    this.context.fillText('fdt: ' + (this.fdtSum / this.fdts.length).toFixed(1) + 'ms', 10, 10 + 12 + 20);
+    this.context.fillText('scale: ' + this.scale.toFixed(1), 10, 10 + 12 + 20 + 20);
     this.previousFrame = currentFrame;
 }
 
