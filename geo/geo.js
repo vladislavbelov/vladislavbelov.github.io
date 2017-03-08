@@ -19,7 +19,7 @@
  */
 
 function GeoEngine() {
-    this.version = "0.5.2";
+    this.version = "0.5.3";
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas = null;
@@ -51,10 +51,6 @@ GeoEngine.prototype.run = function() {
     this.previousFrame = Date.now();
     this.fdts = [];
     this.fdtSum = 0.0;
-    
-    // Ignore some events
-    window.ondragstart = function(event) { return false; };
-    window.onselectstart = function(event) { return false; };
     
     // Prepare data
     var minX = 10000.0, maxX = -10000.0, minY = 10000.0, maxY = -10000.0;
@@ -110,6 +106,10 @@ GeoEngine.prototype.run = function() {
     
     var projectedWidth = maxX - minX, projectedHeight = maxY - minY;
     this.scale = Math.max(1.0, Math.min(this.width / projectedWidth, this.height / projectedHeight));
+    
+    // Ignore some events
+    window.ondragstart = function(event) { return false; };
+    window.onselectstart = function(event) { return false; };
     
     // Initializate all event handlers after data
     document.getElementsByTagName("HTML")[0].addEventListener("wheel", function(event) {
@@ -292,9 +292,8 @@ GeoEngine.prototype.render = function() {
             minY = Math.min(minY, y); maxY = Math.max(maxY, y);
         }
     }
-    this.context.stroke();
-    this.context.fill();
     this.context.closePath();
+    this.context.fill();
     
     // Draw rivers
     this.context.strokeStyle = this.waterColor;
@@ -318,8 +317,8 @@ GeoEngine.prototype.render = function() {
             minY = Math.min(minY, y); maxY = Math.max(maxY, y);
         }
     }
-    this.context.stroke();
     this.context.closePath();
+    this.context.stroke();
     
     // Draw waters
     this.context.beginPath();
@@ -340,11 +339,14 @@ GeoEngine.prototype.render = function() {
             minY = Math.min(minY, y); maxY = Math.max(maxY, y);
         }
     }
-    this.context.fill();
     this.context.closePath();
+    this.context.fill();
     
     // Draw cities
     var r = 0.5;
+    if (this.scale < 4.0) {
+        r = 2.0 / this.scale;
+    }
     var selectScale = 1.6;
     var wasCovered = false;
     this.context.font = '16px monospace';
@@ -392,9 +394,7 @@ GeoEngine.prototype.render = function() {
         }
         this.context.beginPath();
         this.context.arc(x, y, r * this.scale, 0, 2.0 * Math.PI, false);
-        this.context.closePath();
         this.context.fill();
-        this.context.stroke();
         
         var dx = cities[i]['x'] - this.selectedPoint['x'], dy = cities[i]['y'] - this.selectedPoint['y'];
         var distance = Math.sqrt(dx * dx + dy * dy);
@@ -569,6 +569,7 @@ GeoEngine.prototype.render = function() {
     }
     this.context.fillText('fdt: ' + (this.fdtSum / this.fdts.length).toFixed(1) + 'ms', 10, 10 + 12 + 20);
     this.context.fillText('scale: ' + this.scale.toFixed(1), 10, 10 + 12 + 20 + 20);
+    this.context.fillText('version: ' + this.version, 10, 10 + 12 + 20 + 20 + 20);
     this.previousFrame = currentFrame;
 }
 
