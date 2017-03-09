@@ -19,11 +19,12 @@
  */
 
 function GeoEngine() {
-    this.version = "0.5.3";
+    this.version = "0.5.4";
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas = null;
     this.context = null;
+    this.gui = {'elements': []};
 }
 
 window.onload = function() {
@@ -107,6 +108,20 @@ GeoEngine.prototype.run = function() {
     var projectedWidth = maxX - minX, projectedHeight = maxY - minY;
     this.scale = Math.max(1.0, Math.min(this.width / projectedWidth, this.height / projectedHeight));
     
+    // Add gui elements
+    this.addButton(
+        function() { self.zoom(self.scale * 1.4, false); },
+        '+',
+        {'x' : 8, 'y': 256, 'width': 32, 'height': 32},
+        {'family': '32px monospace', 'color': '#ffffff'}
+    );
+    this.addButton(
+        function() { self.zoom(self.scale / 1.4, false); },
+        '-',
+        {'x' : 8, 'y': 256 + 32 + 8, 'width': 32, 'height': 32},
+        {'family': '32px monospace', 'color': '#ffffff'}
+    );
+    
     // Ignore some events
     window.ondragstart = function(event) { return false; };
     window.onselectstart = function(event) { return false; };
@@ -179,21 +194,24 @@ GeoEngine.prototype.onresize = function(event) {
 }
 
 GeoEngine.prototype.onwheel = function(event) {
-    var newScale = this.scale;
     if (event.deltaY < 0) {
-        newScale *= 1.1;
-    } else if (event.deltaY > 0 && newScale > 1.0) {
-        newScale /= 1.1;
+        this.zoom(this.scale * 1.1, true);
+    } else if (event.deltaY > 0) {
+        this.zoom(this.scale / 1.1, true);
     }
-    var focusX = (this.mousePosition['x'] - this.shiftX) / this.scale;
-    var focusY = (this.height - (this.mousePosition['y'] - this.shiftY)) / this.scale;
-    this.shiftX += focusX * (this.scale - newScale);
-    this.shiftY -= focusY * (this.scale - newScale);
-    this.scale = newScale;
 }
 
 GeoEngine.prototype.onmousedown = function(event) {
     if (event.button == 0) {
+        for (var i = 0; i < this.gui['elements'].length; ++i) {
+            var element = this.gui['elements'][i];
+            if (element['rect']['x'] > event.clientX || event.clientX > element['rect']['x'] + element['rect']['width'])
+                continue;
+            if (element['rect']['y'] > event.clientY || event.clientY > element['rect']['y'] + element['rect']['height'])
+                continue;
+            element['callback']();
+            return false;
+        }
         this.mouseDownPosition['x'] = event.clientX;
         this.mouseDownPosition['y'] = event.clientY;
         this.mousePosition['x'] = event.clientX;
@@ -227,11 +245,19 @@ GeoEngine.prototype.onclick = function(event) {
 }
 
 GeoEngine.prototype.ondblclick = function(event) {
-    this.recenter = true;
     return false;
 }
 
 GeoEngine.prototype.onmousemove = function(event) {
+    for (var i = 0; i < this.gui['elements'].length; ++i) {
+        var element = this.gui['elements'][i];
+        element['status'] = 'normal';
+        if (element['rect']['x'] > event.clientX || event.clientX > element['rect']['x'] + element['rect']['width'])
+            continue;
+        if (element['rect']['y'] > event.clientY || event.clientY > element['rect']['y'] + element['rect']['height'])
+            continue;
+        element['status'] = 'hovered';
+    }
     if (this.mousePressed) {
         var movementX = event.clientX - this.mousePosition['x'];
         var movementY = event.clientY - this.mousePosition['y'];
@@ -265,6 +291,23 @@ GeoEngine.prototype.toPlane = function(coords) {
 
 GeoEngine.prototype.toSphere = function(coords) {
     // TODO: implement
+}
+
+GeoEngine.prototype.zoom = function(newScale, toMouse) {
+    newScale = Math.max(1.0, newScale);
+    var px = 0, py = 0;
+    if (toMouse) {
+        px = this.mousePosition['x'];
+        py = this.mousePosition['y'];
+    } else {
+        px = this.width / 2;
+        py = this.height / 2;
+    }
+    var focusX = (px - this.shiftX) / this.scale;
+    var focusY = (this.height - (py - this.shiftY)) / this.scale;
+    this.shiftX += focusX * (this.scale - newScale);
+    this.shiftY -= focusY * (this.scale - newScale);
+    this.scale = newScale;
 }
 
 GeoEngine.prototype.render = function() {
@@ -558,25 +601,70 @@ GeoEngine.prototype.render = function() {
         this.recenter = false;
     }
     
+    this.drawGUI();
+    
     this.context.fillStyle = '#000000';
     var currentFrame = Date.now();
     this.context.font = '12px monospace';
     var fdt = (currentFrame - this.previousFrame);
+    this.previousFrame = currentFrame;
     this.fdts.push(fdt);
     this.fdtSum += fdt;
     if (this.fdts.length > 20) {
         this.fdtSum -= this.fdts.shift();
     }
+    
+    // Additional information
     this.context.fillText('fdt: ' + (this.fdtSum / this.fdts.length).toFixed(1) + 'ms', 10, 10 + 12 + 20);
     this.context.fillText('scale: ' + this.scale.toFixed(1), 10, 10 + 12 + 20 + 20);
     this.context.fillText('version: ' + this.version, 10, 10 + 12 + 20 + 20 + 20);
-    this.previousFrame = currentFrame;
 }
 
 GeoEngine.prototype.onframe = function() {
     var self = this;
     self.render();
     window.requestAnimationFrame(function() { self.onframe(); }, self.canvas);
+}
+
+GeoEngine.prototype.addButton = function(callback, text, rect, font) {
+    var element = {
+        'type': 'button',
+        'text': text,
+        'callback': callback,
+        'rect': rect,
+        'font': font
+    };
+    this.context.font = element['font']['family'];
+    element['size'] = this.context.measureText(element['text']);
+    element['size']['height'] = parseInt(element['font']['family']);
+    this.gui['elements'].push(element);
+}
+
+GeoEngine.prototype.drawGUI = function() {
+    for (var i = 0; i < this.gui['elements'].length; ++i) {
+        var element = this.gui['elements'][i];
+        
+        if (element['type'] == 'button') {
+            if (element['status'] == 'hovered') {
+                this.context.fillStyle = '#30c0ff';
+            } else {
+                this.context.fillStyle = '#00a0ff';
+            }
+            this.context.fillRect(
+                element['rect']['x'], element['rect']['y'],
+                element['rect']['width'], element['rect']['height']
+            );
+            
+            this.context.font = element['font']['family'];
+            this.context.fillStyle = element['font']['color'];
+            this.context.fillText(
+                element['text'],
+                (element['rect']['width'] - element['size']['width']) / 2.0 + element['rect']['x'],
+                (element['rect']['height'] - element['size']['height']) / 2.0 + element['rect']['y']
+                    + element['size']['height'] - element['size']['height'] / 4.0
+            );
+        }
+    }
 }
 
 GeoEngine.prototype.shuffle = function(array) {
