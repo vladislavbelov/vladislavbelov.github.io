@@ -19,7 +19,7 @@
  */
 
 function GeoEngine() {
-    this.version = "0.5.4";
+    this.version = "0.5.5";
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas = null;
@@ -52,75 +52,48 @@ GeoEngine.prototype.run = function() {
     this.previousFrame = Date.now();
     this.fdts = [];
     this.fdtSum = 0.0;
+    this.r = 0.5;
     
     // Prepare data
-    var minX = 10000.0, maxX = -10000.0, minY = 10000.0, maxY = -10000.0;
-    for (var i = 0; i < cities.length; ++i)
-    {
-        var position = this.toPlane(cities[i]);
-        cities[i]['x'] = position['x'];
-        cities[i]['y'] = position['y'];
-        minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
-        minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
-    }
-    for (var i = 0; i < lands.length; ++i)
-    {
-        for (var j = 0; j < lands[i].length; ++j)
-        {
-            lands[i][j] = {'lon': lands[i][j][0], 'lat': lands[i][j][1]};
-            var position = this.toPlane(lands[i][j]);
-            lands[i][j]['x'] = position['x'];
-            lands[i][j]['y'] = position['y'];
-            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
-            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
-        }
-    }
-    for (var i = 0; i < rivers.length; ++i)
-    {
-        for (var j = 0; j < rivers[i].length; ++j)
-        {
-            rivers[i][j] = {'lon': rivers[i][j][0], 'lat': rivers[i][j][1]};
-            var position = this.toPlane(rivers[i][j]);
-            rivers[i][j]['x'] = position['x'];
-            rivers[i][j]['y'] = position['y'];
-            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
-            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
-        }
-    }
-    for (var i = 0; i < waters.length; ++i)
-    {
-        for (var j = 0; j < waters[i].length; ++j)
-        {
-            waters[i][j] = {'lon': waters[i][j][0], 'lat': waters[i][j][1]};
-            var position = this.toPlane(waters[i][j]);
-            waters[i][j]['x'] = position['x'];
-            waters[i][j]['y'] = position['y'];
-            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
-            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
-        }
-    }
+    this.prepare();
     
     this.answers = new Array(cities.length);
+    this.answers_width = 248;
+    this.answers_cols = 26;
     this.descriptions = ['Бывает...', 'Вы Мастер по городам!', 'Вы Эксперт по городам.', 'Вы Ученик по городам.', 'Вы Новичок по городам.', 'Вы спали на уроках географии.', 'Не ноль - уже хорошо.'];
     
     this.reset();
     
-    var projectedWidth = maxX - minX, projectedHeight = maxY - minY;
-    this.scale = Math.max(1.0, Math.min(this.width / projectedWidth, this.height / projectedHeight));
-    
     // Add gui elements
     this.addButton(
-        function() { self.zoom(self.scale * 1.4, false); },
+        function(element) { self.zoom(self.scale * 1.4, false); },
         '+',
         {'x' : 8, 'y': 256, 'width': 32, 'height': 32},
         {'family': '32px monospace', 'color': '#ffffff'}
     );
     this.addButton(
-        function() { self.zoom(self.scale / 1.4, false); },
+        function(element) { self.zoom(self.scale / 1.4, false); },
         '-',
         {'x' : 8, 'y': 256 + 32 + 8, 'width': 32, 'height': 32},
         {'family': '32px monospace', 'color': '#ffffff'}
     );
+    
+    // Add the hard level's button
+    // TODO: make a native button
+    var buttonHard = document.createElement('DIV');
+    buttonHard.id = 'geo-button-hard';
+    buttonHard.innerHTML = 'Суровый режим';
+    buttonHard.style['position'] = 'fixed';
+    buttonHard.style['border'] = '0';
+    buttonHard.style['padding'] = '4px 8px';
+    buttonHard.style['right'] = '32px';
+    buttonHard.style['top'] = '32px'; 
+    buttonHard.style['font-family'] = 'monospace';
+    buttonHard.style['font-size'] = '16px';
+    buttonHard.style['color'] = '#f0f0f0';
+    buttonHard.style['background-color'] = '#ffa200';
+    buttonHard.onclick = function() { self.enableHard(); buttonHard.style['visibility'] = 'hidden'; };
+    document.getElementsByTagName('BODY')[0].appendChild(buttonHard);
     
     // Ignore some events
     window.ondragstart = function(event) { return false; };
@@ -156,6 +129,64 @@ GeoEngine.prototype.run = function() {
     this.onframe();
     
     console.log('GeoEngine v' + this.version + ' successfuly loaded.');
+}
+
+GeoEngine.prototype.prepare = function() {
+    var minX = 10000.0, maxX = -10000.0, minY = 10000.0, maxY = -10000.0;
+    for (var i = 0; i < cities.length; ++i)
+    {
+        if ('x' in cities[i])
+            continue;
+        var position = this.toPlane(cities[i]);
+        cities[i]['x'] = position['x'];
+        cities[i]['y'] = position['y'];
+        minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+        minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+    }
+    for (var i = 0; i < lands.length; ++i)
+    {
+        for (var j = 0; j < lands[i].length; ++j)
+        {
+            if ('x' in lands[i][j])
+                continue;
+            lands[i][j] = {'lon': lands[i][j][0], 'lat': lands[i][j][1]};
+            var position = this.toPlane(lands[i][j]);
+            lands[i][j]['x'] = position['x'];
+            lands[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    for (var i = 0; i < rivers.length; ++i)
+    {
+        for (var j = 0; j < rivers[i].length; ++j)
+        {
+            if ('x' in rivers[i][j])
+                continue;
+            rivers[i][j] = {'lon': rivers[i][j][0], 'lat': rivers[i][j][1]};
+            var position = this.toPlane(rivers[i][j]);
+            rivers[i][j]['x'] = position['x'];
+            rivers[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    for (var i = 0; i < waters.length; ++i)
+    {
+        for (var j = 0; j < waters[i].length; ++j)
+        {
+            if ('x' in waters[i][j])
+                continue;
+            waters[i][j] = {'lon': waters[i][j][0], 'lat': waters[i][j][1]};
+            var position = this.toPlane(waters[i][j]);
+            waters[i][j]['x'] = position['x'];
+            waters[i][j]['y'] = position['y'];
+            minX = Math.min(minX, position['x']); maxX = Math.max(maxX, position['x']);
+            minY = Math.min(minY, position['y']); maxY = Math.max(maxY, position['y']);
+        }
+    }
+    var projectedWidth = maxX - minX, projectedHeight = maxY - minY;
+    this.scale = Math.max(1.0, Math.min(this.width / projectedWidth, this.height / projectedHeight));
 }
 
 GeoEngine.prototype.reset = function() {
@@ -209,7 +240,7 @@ GeoEngine.prototype.onmousedown = function(event) {
                 continue;
             if (element['rect']['y'] > event.clientY || event.clientY > element['rect']['y'] + element['rect']['height'])
                 continue;
-            element['callback']();
+            element['callback'](element);
             return false;
         }
         this.mouseDownPosition['x'] = event.clientX;
@@ -310,6 +341,24 @@ GeoEngine.prototype.zoom = function(newScale, toMouse) {
     this.scale = newScale;
 }
 
+GeoEngine.prototype.enableHard = function() {
+    var include = document.createElement('SCRIPT');
+    var self = this;
+    var callback = function() {
+        cities = cities.concat(cities_hard);
+        self.answers = new Array(cities.length);
+        self.answers_width = 768;
+        self.answers_cols = 80;
+        self.r = 0.1;
+        self.prepare();
+        self.reset();
+    };
+    include.onload = callback;
+    include.type = 'text/javascript';
+    include.src = 'data_hard.json';
+    document.getElementsByTagName('HEAD')[0].appendChild(include);
+}
+
 GeoEngine.prototype.render = function() {
     this.context.clearRect(0, 0, this.width, this.height);
     var minX = 10000.0, maxX = -10000.0, minY = 10000.0, maxY = -10000.0;
@@ -386,8 +435,8 @@ GeoEngine.prototype.render = function() {
     this.context.fill();
     
     // Draw cities
-    var r = 0.5;
-    if (this.scale < 4.0) {
+    var r = this.r;
+    if (this.scale < 2.0 / this.r) {
         r = 2.0 / this.scale;
     }
     var selectScale = 1.6;
@@ -581,13 +630,13 @@ GeoEngine.prototype.render = function() {
                 this.context.fillStyle = '#c05050';
             }
             this.context.beginPath();
-            this.context.arc((this.width - 248) / 2.0 + px, 64 + 48 + 16 + py, 2.0, 0, 2.0 * Math.PI, false);
+            this.context.arc((this.width - this.answers_width) / 2.0 + px, 64 + 48 + 16 + py, 2.0, 0, 2.0 * Math.PI, false);
             this.context.closePath();
             this.context.fill();
             this.context.stroke();
             
             px += 10;
-            if ((i + 1) % 26 == 0) {
+            if ((i + 1) % this.answers_cols == 0) {
                 px = 0;
                 py += 10;
             }
@@ -632,7 +681,8 @@ GeoEngine.prototype.addButton = function(callback, text, rect, font) {
         'text': text,
         'callback': callback,
         'rect': rect,
-        'font': font
+        'font': font,
+        'visible': true
     };
     this.context.font = element['font']['family'];
     element['size'] = this.context.measureText(element['text']);
@@ -643,6 +693,9 @@ GeoEngine.prototype.addButton = function(callback, text, rect, font) {
 GeoEngine.prototype.drawGUI = function() {
     for (var i = 0; i < this.gui['elements'].length; ++i) {
         var element = this.gui['elements'][i];
+        
+        if (!element['visible'])
+            continue;
         
         if (element['type'] == 'button') {
             if (element['status'] == 'hovered') {
