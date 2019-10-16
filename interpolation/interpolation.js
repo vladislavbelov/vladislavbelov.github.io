@@ -21,7 +21,7 @@
 function Arguments2DWatcher(callback) {
     this.callback = callback;
     this.previousInputValue = undefined;
-    this.args = [];
+    this.args = [0.0, 1.0];
     let input = document.getElementById('arguments-2d');
     let self = this;
     input.addEventListener('input', function() { self.onInputChange(); });
@@ -51,6 +51,9 @@ Arguments2DWatcher.prototype.parseArguments = function(str) {
             value = 0.0;
         newArguments.push(value);
     }
+    // We don't want to interpolate a single or no point.
+    if (newArguments.length < 2)
+        return;
     this.args = newArguments;
 };
 
@@ -81,7 +84,7 @@ function Interpolation2D(data) {
     div.appendChild(title);
     let tex = document.createElement('span');
     tex.classList = 'tex';
-    var options = MathJax.getMetricsFor(tex);
+    let options = MathJax.getMetricsFor(tex);
     MathJax.tex2chtmlPromise(this.data.tex, options).then(function(node) {
         tex.appendChild(node);
         MathJax.startup.document.clear();
@@ -248,6 +251,10 @@ Interpolation2D.prototype.random = function(min, max) {
     return Math.floor(min + Math.random() * (max + 1 - min));
 }
 
+function Clamp(min, max, value) {
+    return Math.max(Math.min(value, max), min);
+}
+
 function NearestInterpolation(y0, y1, x) {
     return x > 0.5 ? y1 : y0;
 }
@@ -264,23 +271,49 @@ window.onload = function() {
     MathJax.texReset();
     new Interpolation2D({
         'name': 'Nearest',
-        'tex': '\\begin{equation*}\\begin{cases}y_0, x \\in [0, 0.5)\\\\ y_1, x \\in [0.5, 1.0]\\end{cases}\\end{equation*}',
+        'tex': 'f(y_0, y_1, x) = \\begin{equation*}\\begin{cases}y_0, x \\in [0, 0.5)\\\\ y_1, x \\in [0.5, 1.0]\\end{cases}\\end{equation*}',
         'function': function(values, index, x) {
             return NearestInterpolation(values[index], values[index + 1], x);
         }
     });
     new Interpolation2D({
         'name': 'Linear',
-        'tex': 'y0 \\cdot (1 - x) + y1 \\cdot x',
+        'tex': 'f(y_0, y_1, x) = y_0 \\cdot (1 - x) + y_1 \\cdot x',
         'function': function(values, index, x) {
             return LinearInterpolation(values[index], values[index + 1], x);
         }
     });
     new Interpolation2D({
         'name': 'Cosine',
-        'tex': 'Linear\(y0, y1, -\\frac{-\\pi \\cdot x}{2} + 0.5\)',
+        'tex': 'f(y_0, y_1, x) = Linear\(y_0, y_1, -\\frac{-\\pi \\cdot x}{2} + 0.5\)',
         'function': function(values, index, x) {
             return CosineInterpolation(values[index], values[index + 1], x);
+        }
+    });
+    new Interpolation2D({
+        'name': 'Simple Cubic',
+        'tex': '\\begin{align}' +
+            'a = -y_0 + 2 \\cdot y_1 - y_2 - \\frac{y2 - y0}{2} + \\frac{y3 - y1}{2} \\\\' +
+            'b = 3 \\cdot (y_2 - y_1) - (y_2 - y_0) - \\frac{y_3 - y_1}{2} \\\\' +
+            'c = \\frac{y2 - y0}{2} \\\\ d = y_1 \\\\' +
+            'f(y_0, y_1, y_2, y_3, x) = a \\cdot x^3 + b \\cdot x^2 + c \\cdot x + d' +
+            '\\end{align}',
+        'function': function(values, index, x) {
+            let y0 = index > 0
+                ? values[index - 1]
+                : Clamp(0.0, 1.0, values[0] * 2.0 - values[1]);
+            let y1 = values[index];
+            let y2 = values[index + 1];
+            let y3 = index + 2 < values.length
+                ? values[index + 2]
+                : Clamp(0.0, 1.0, values[values.length - 1] * 2.0 - values[values.length - 2]);
+
+            let c = (y2 - y0) / 2.0;
+            let d = y1;
+            let b = 3.0 * (y2 - y1) - (y2 - y0) - (y3 - y1) / 2.0;
+            let a = - y0 + 2.0 * y1 - y2 - (y2 - y0) / 2.0 + (y3 - y1) / 2.0;
+
+            return a * x * x * x + b * x * x + c * x + d;
         }
     });
 };
