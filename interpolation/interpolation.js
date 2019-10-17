@@ -267,6 +267,36 @@ function CosineInterpolation(y0, y1, x) {
     return LinearInterpolation(y0, y1, -Math.cos(Math.PI * x) / 2.0 + 0.5);
 }
 
+function SimpleSecantCubicInterpolation(y0, y1, y2, y3, x) {
+    let c = (y2 - y0) / 2.0;
+    let d = y1;
+    let b = 3.0 * (y2 - y1) - (y2 - y0) - (y3 - y1) / 2.0;
+    let a = - y0 + 2.0 * y1 - y2 - (y2 - y0) / 2.0 + (y3 - y1) / 2.0;
+
+    return x * (x * (a * x + b) + c) + d;
+}
+
+function LagrangePolynomialInterpolation(ys, x) {
+    let k = ys.length - 1;
+    let xs = [];
+    for (let j = 0; j <= k; ++j)
+        xs.push(j);
+    let l = [];
+    for (let j = 0; j <= k; ++j) {
+        let p = 1.0;
+        for (let i = 0; i <= k; ++i) {
+            if (i == j)
+                continue;
+            p *= (x - xs[i]) / (xs[j] - xs[i]);
+        }
+        l.push(p);
+    }
+    let result = 0.0;
+    for (let j = 0; j <= k; ++j)
+        result += ys[j] * l[j];
+    return result;
+}
+
 window.onload = function() {
     MathJax.texReset();
     new Interpolation2D({
@@ -291,7 +321,7 @@ window.onload = function() {
         }
     });
     new Interpolation2D({
-        'name': 'Simple Cubic',
+        'name': 'Simple Secant Cubic',
         'tex': '\\begin{align}' +
             'a = -y_0 + 2 \\cdot y_1 - y_2 - \\frac{y2 - y0}{2} + \\frac{y3 - y1}{2} \\\\' +
             'b = 3 \\cdot (y_2 - y_1) - (y_2 - y_0) - \\frac{y_3 - y_1}{2} \\\\' +
@@ -308,12 +338,17 @@ window.onload = function() {
                 ? values[index + 2]
                 : Clamp(0.0, 1.0, values[values.length - 1] * 2.0 - values[values.length - 2]);
 
-            let c = (y2 - y0) / 2.0;
-            let d = y1;
-            let b = 3.0 * (y2 - y1) - (y2 - y0) - (y3 - y1) / 2.0;
-            let a = - y0 + 2.0 * y1 - y2 - (y2 - y0) / 2.0 + (y3 - y1) / 2.0;
-
-            return a * x * x * x + b * x * x + c * x + d;
+            return SimpleSecantCubicInterpolation(y0, y1, y2, y3, x);
+        }
+    });
+    new Interpolation2D({
+        'name': 'Lagrange Polynomial',
+        'tex': '\\begin{align}' +
+            'L(x) = \\sum_{j=0}^{k}y_j l_j(x) \\\\' +
+            'l_j(x) = \\prod_{\\substack{0 \\le i \\le k \\\\ i \\neq j}} \\frac{x - x_i}{x_j - x_i}' +
+            '\\end{align}',
+        'function': function(values, index, x) {
+            return LagrangePolynomialInterpolation(values, index + x);
         }
     });
 };
