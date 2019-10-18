@@ -276,6 +276,20 @@ function SimpleSecantCubicInterpolation(y0, y1, y2, y3, x) {
     return x * (x * (a * x + b) + c) + d;
 }
 
+function SimpleSecantMonotoneCubicInterpolation(y0, y1, y2, y3, x) {
+    let calculateK = function(dy, d) {
+        return d >= 0 ? Math.max(dy / 2.0, 0.0) : Math.min(dy / 2.0, 0.0);
+    };
+    let k1 = calculateK(y2 - y0, y2 - y1);
+    let k2 = calculateK(y3 - y1, y3 - y2);
+    let c = k1;
+    let d = y1;
+    let b = 3.0 * (y2 - y1 - k1) + k1 - k2;
+    let a = (y2 - y1 - k1) - b;
+
+    return x * (x * (a * x + b) + c) + d;
+}
+
 function LagrangePolynomialInterpolation(ys, x) {
     let k = ys.length - 1;
     let xs = [];
@@ -339,6 +353,30 @@ window.onload = function() {
                 : Clamp(0.0, 1.0, values[values.length - 1] * 2.0 - values[values.length - 2]);
 
             return SimpleSecantCubicInterpolation(y0, y1, y2, y3, x);
+        }
+    });
+    new Interpolation2D({
+        'name': 'Simple Secant Monotone Cubic',
+        'tex': '\\begin{align}' +
+            'k_i = \\frac{y_{i + 1} - y_{i - 1}}{2} \\\\' +
+            '\\textbf{if} \\space y_{i + 1} - y_{i} \\ge 0 \\space \\textbf{then} \\space k_i = max(k_i, 0) \\space \\textbf{else} \\space k_i = min(k_i, 0)\\\\' +
+            'a = (y_2 - y_1 - k_1) - b \\\\' +
+            'b = 3 \\cdot (y2 - y1 - k_1) + k1 - k2 \\\\' +
+            'c = k_1 \\\\' +
+            'c = y_1 \\\\' +
+            'f(y_0, y_1, y_2, y_3, x) = a \\cdot x^3 + b \\cdot x^2 + c \\cdot x + d' +
+            '\\end{align}',
+        'function': function(values, index, x) {
+            let y0 = index > 0
+                ? values[index - 1]
+                : Clamp(0.0, 1.0, values[0] * 2.0 - values[1]);
+            let y1 = values[index];
+            let y2 = values[index + 1];
+            let y3 = index + 2 < values.length
+                ? values[index + 2]
+                : Clamp(0.0, 1.0, values[values.length - 1] * 2.0 - values[values.length - 2]);
+
+            return SimpleSecantMonotoneCubicInterpolation(y0, y1, y2, y3, x);
         }
     });
     new Interpolation2D({
