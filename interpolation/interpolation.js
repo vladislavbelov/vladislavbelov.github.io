@@ -140,6 +140,7 @@ Interpolation2D.prototype.draw = function() {
 
     this.drawGrid();
     this.drawFunction();
+    this.drawPoints();
 };
 
 Interpolation2D.prototype.drawGrid = function() {
@@ -200,6 +201,36 @@ Interpolation2D.prototype.drawGrid = function() {
             this.padding + shift + fontSize / 2.0,
             y + fontSize + shift);
     }
+};
+
+Interpolation2D.prototype.drawPoints = function() {
+    let ctx = this.context;
+    let width = this.canvas.width / this.dpi;
+    let height = this.canvas.height / this.dpi;
+    let shift = 0.0;
+
+    let args = this.argumentsWatcher.getArguments();
+    if (args.length == 0)
+        return;
+
+    let points = [];
+    for (let x = 0; x < args.length; ++x) {
+        points.push({
+            'x': x * this.segmentSize + this.padding,
+            'y': height - args[x] * this.segmentSize - this.padding
+        });
+    }
+
+    ctx.fillStyle = '#ffe0a0';
+    ctx.strokeStyle = '#707070';
+    ctx.beginPath();
+    for (let i = 0; i < points.length; ++i) {
+        const radius = 3;
+        ctx.moveTo(points[i].x + radius, points[i].y);
+        ctx.arc(points[i].x, points[i].y, radius, 0, 2 * Math.PI);
+    }
+    ctx.fill();
+    ctx.stroke();
 };
 
 Interpolation2D.prototype.drawFunction = function() {
