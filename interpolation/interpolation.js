@@ -139,7 +139,7 @@ Interpolation2D.prototype.draw = function() {
     ctx.fillRect(0, 0, width, height);
 
     this.drawGrid();
-    this.drawFunction();
+    this.drawFunction(this.data.function);
     this.drawPoints();
 };
 
@@ -225,7 +225,7 @@ Interpolation2D.prototype.drawPoints = function() {
     ctx.strokeStyle = '#707070';
     ctx.beginPath();
     for (let i = 0; i < points.length; ++i) {
-        const radius = 3;
+        const radius = 2;
         ctx.moveTo(points[i].x + radius, points[i].y);
         ctx.arc(points[i].x, points[i].y, radius, 0, 2 * Math.PI);
     }
@@ -233,7 +233,7 @@ Interpolation2D.prototype.drawPoints = function() {
     ctx.stroke();
 };
 
-Interpolation2D.prototype.drawFunction = function() {
+Interpolation2D.prototype.drawFunction = function(func) {
     let ctx = this.context;
     let width = this.canvas.width / this.dpi;
     let height = this.canvas.height / this.dpi;
@@ -255,7 +255,7 @@ Interpolation2D.prototype.drawFunction = function() {
         if (index >= args.length - 1) {
             break;
         }
-        let y = this.data.function(args, index, x);
+        let y = func(args, index, x);
         points.push({ 'x': realX, 'y': y });
     }
 
