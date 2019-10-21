@@ -411,6 +411,149 @@ window.onload = function() {
         }
     });
     new Interpolation2D({
+        'name': 'Most Smooth Cubic',
+        'tex': '',
+        'function': (function() {
+            let calculateB = function(y1, y2, k1, k2) {
+                return 3.0 * (y2 - y1 - k1) + k1 - k2;
+            };
+            let calculateA = function(y1, y2, k1, k2) {
+                return y2 - y1 - k1 - calculateB(y1, y2, k1, k2);
+            };
+            let calculateMaximumDerivative = function(values, kValues) {
+                let maxD = 0.0;
+                for (let i = 0; i + 1 < values.length; ++i) {
+                    let y1 = values[i];
+                    let y2 = values[i + 1];
+                    let k1 = kValues && i < kValues.length ? kValues[i] : 0.0;
+                    let k2 = kValues && i + 1 < kValues.length ? kValues[i + 1] : 0.0;
+                    let r = 2.0 * calculateB(y1, y2, k1, k2);
+                    let d = Math.max(Math.abs(r), Math.abs(r + 6.0 * calculateA(y1, y2, k1, k2)));
+                    maxD = Math.max(maxD, d);
+                }
+                return maxD;
+            };
+            let solveLinearInequality = function(y, d, k2Bounds) {
+                // Solves the system:
+                //  |y - 4k1 + 2k2| <= d
+                //  |-y + 2k1 + 4k2| <= d
+                // Where k1 and k2 are secants (their tangents).
+                // If k2Bounds is present then there is the additional
+                // condition: k2Bounds[0] <= k2 <= k2Bounds[1].
+                if ((d + y) / 2.0 < (d - y) / -2.0)
+                    return undefined;
+                if ((d + y) / 2.0 < (y - d) / 2.0)
+                    return undefined;
+                let k1s = [], k2s = [];
+                if (!k2Bounds) {
+                    for (let a of [(d - y) / -2.0, (d + y) / 2.0]) {
+                        for (let b of [(d + y) / 2.0, (y - d) / 2.0]) {
+                            let k1 = 2.0 * a / 3.0 - b / 3.0;
+                            let k2 = 2.0 * b / 3.0 - a / 3.0;
+                            k1s.push(k1);
+                            k2s.push(k2);
+                        }
+                    }
+                } else {
+                    k2s.push(k2Bounds[0], k2Bounds[1]);
+                    for (let a of [(d - y) / -2.0, (d + y) / 2.0]) {
+                        for (let b of [(d + y) / 2.0, (y - d) / 2.0]) {
+                            let k1 = 2.0 * a / 3.0 - b / 3.0;
+                            let k2 = 2.0 * b / 3.0 - a / 3.0;
+                            if (k2Bounds[0] < k2 && k2 < k2Bounds[1])
+                                k2s.push(k2);
+                        }
+                    }
+                    for (let k2 of k2s) {
+                        let k1Bounds = [
+                            Math.max(((d - y) / (-2.0) - k2) / 2.0, (y - d) / 2.0 - 2.0 * k2),
+                            Math.min(((d + y) / 2.0 - k2) / 2.0, (d + y) / 2.0 - 2.0 * k2)
+                        ];
+                        if (k1Bounds[0] <= k1Bounds[1]) {
+                            k1s.push(k1Bounds[0]);
+                            k1s.push(k1Bounds[1]);
+                        }
+                    }
+                }
+                k1s.sort();
+                k2s.sort();
+                return [[k1s[0], k1s[k1s.length - 1]], [k2s[0], k2s[k2s.length - 1]]];
+            };
+            let canHaveDerivative = function(values, d) {
+                if (d < 0.0 || !values || values.length < 2)
+                    return false;
+                let kBounds = [];
+                for (let i = 0; i < values.length; ++i)
+                    kBounds.push(undefined);
+                for (let i = values.length - 2; i >= 0; --i) {
+                    let y = 6.0 * (values[i + 1] - values[i]);
+                    let solution = solveLinearInequality(y, d, kBounds[i + 1]);
+                    if (!solution)
+                        return false;
+                    if (!kBounds[i + 1]) {
+                        kBounds[i] = solution[0];
+                        kBounds[i + 1] = solution[1];
+                    } else {
+                        if (solution[1][0] > kBounds[i + 1][1] || solution[1][1] < kBounds[i + 1][0])
+                            return undefined;
+                        kBounds[i] = solution[0];
+                        kBounds[i + 1] = [
+                            Math.max(solution[1][0], kBounds[i + 1][0]),
+                            Math.min(solution[1][1], kBounds[i + 1][1])
+                        ];
+                    }
+                }
+                return true;
+            };
+            let calculateSecantsForDerivative = function(values, d) {
+                console.log(d);
+                let secants = [];
+                if (1 || !canHaveDerivative(values, d)) {
+                    for (let i = 0; i < values.length; ++i)
+                        secants.push(i % 2);
+                    return secants;
+                }
+                return secants;
+            };
+            // We don't want to recalculate secants for each point.
+            let isCacheOutdated = true;
+            let cacheValues = [];
+            let kValues = [];
+            // Minimum and maximum bounds of second derivative.
+            let updateCache = function() {
+                isCacheOutdated = false;
+                let lowerD = 0.0, upperD = calculateMaximumDerivative(cacheValues);
+                for (let it = 0; it < 10; ++it) {
+                    let middleD = (lowerD + upperD) / 2.0;
+                    if (canHaveDerivative(cacheValues, middleD)) {
+                        upperD = middleD;
+                        break;
+                    }
+                    else
+                        lowerD = middleD;
+                }
+                kValues = calculateSecantsForDerivative(cacheValues, upperD);
+            };
+            return function(values, index, x) {
+                if (cacheValues != values) {
+                    isCacheOutdated = true;
+                    cacheValues = values;
+                }
+                if (isCacheOutdated)
+                    updateCache();
+                let y1 = values[index];
+                let y2 = values[index + 1];
+                let k1 = kValues && index < kValues.length ? kValues[index] : 0.0;
+                let k2 = kValues && index + 1 < kValues.length ? kValues[index + 1] : 0.0;
+                let a = calculateA(y1, y2, k1, k2);
+                let b = calculateB(y1, y2, k1, k2);
+                let c = k1;
+                let d = y1;
+                return x * (x * (a * x + b) + c) + d;
+            };
+        })()
+    });
+    new Interpolation2D({
         'name': 'Lagrange Polynomial',
         'tex': '\\begin{align}' +
             'L(x) = \\sum_{j=0}^{k}y_j l_j(x) \\\\' +
