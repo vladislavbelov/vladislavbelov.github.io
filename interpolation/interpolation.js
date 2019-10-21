@@ -412,7 +412,14 @@ window.onload = function() {
     });
     new Interpolation2D({
         'name': 'Most Smooth Cubic',
-        'tex': '',
+        'tex': '\\begin{align}' +
+            'f(x) = a \\cdot x^3 + b \\cdot x^2 + c \\cdot x + d \\\\' +
+            'f\'(x) = 3a \\cdot x^2 + 2b \\cdot x + c \\\\' +
+            'f\'\'(x) = 6a \\cdot x + 2b \\space (\\min(f\'\'(x)))\\\\' +
+            'f(0) = y_1, f(1) = y2, f\'(0) = c = k_1, f\'(1) = 3a + 2b + c = k_2 \\\\' +
+            'D - \\text{current derivative}, Y = 6 \\cdot y_2 - 6 \\cdot y_1 \\\\' +
+            '|Y - 4 \\cdot k_1 - 2 \\cdot k_2| \\le D \\space \\textbf{and} \\space |-Y + 2 \\cdot k_1 + 4 \\cdot k_2| \\le D' +
+            '\\end{align}',
         'function': (function() {
             let calculateB = function(y1, y2, k1, k2) {
                 return 3.0 * (y2 - y1 - k1) + k1 - k2;
@@ -479,9 +486,7 @@ window.onload = function() {
                 k2s.sort();
                 return [[k1s[0], k1s[k1s.length - 1]], [k2s[0], k2s[k2s.length - 1]]];
             };
-            let canHaveDerivative = function(values, d) {
-                if (d < 0.0 || !values || values.length < 2)
-                    return false;
+            let calculateDerivativeBounds = function(values, d) {
                 let kBounds = [];
                 for (let i = 0; i < values.length; ++i)
                     kBounds.push(undefined);
@@ -489,8 +494,8 @@ window.onload = function() {
                     let y = 6.0 * (values[i + 1] - values[i]);
                     let solution = solveLinearInequality(y, d, kBounds[i + 1]);
                     if (!solution)
-                        return false;
-                    if (!kBounds[i + 1]) {
+                        return undefined;
+                    if (i == values.length - 2) {
                         kBounds[i] = solution[0];
                         kBounds[i + 1] = solution[1];
                     } else {
@@ -503,15 +508,35 @@ window.onload = function() {
                         ];
                     }
                 }
-                return true;
+                return kBounds;
+            };
+            let canHaveDerivative = function(values, d) {
+                if (d < 0.0 || !values || values.length < 2)
+                    return false;
+                let kBounds = calculateDerivativeBounds(values, d);
+                return kBounds && kBounds.length == values.length;
             };
             let calculateSecantsForDerivative = function(values, d) {
-                console.log(d);
                 let secants = [];
-                if (1 || !canHaveDerivative(values, d)) {
-                    for (let i = 0; i < values.length; ++i)
-                        secants.push(i % 2);
+                for (let i = 0; i < values.length; ++i)
+                    secants.push(0.0);
+                if (!canHaveDerivative(values, d))
                     return secants;
+                let kBounds = calculateDerivativeBounds(values, d);
+                for (let i = 0; i < values.length; ++i) {
+                    if (i == 0) {
+                        secants[i] = Math.abs(kBounds[i][0]) < Math.abs(kBounds[i][1])
+                            ? kBounds[i][0] : kBounds[i][1];
+                    } else {
+                        let y = 6.0 * (values[i] - values[i - 1]);
+                        let k1 = secants[i - 1];
+                        let k2Bounds = [
+                            Math.max((d - y) / (-2.0) - 2.0 * k1, ((y - d) / 2.0 - k1) / 2.0),
+                            Math.min((d + y) / 2.0 - 2.0 * k1, ((d + y) / 2.0 - k1) / 2.0)
+                        ];
+                        secants[i] = Math.abs(k2Bounds[0]) < Math.abs(k2Bounds[1])
+                            ? k2Bounds[0] : k2Bounds[1];
+                    }
                 }
                 return secants;
             };
@@ -523,12 +548,10 @@ window.onload = function() {
             let updateCache = function() {
                 isCacheOutdated = false;
                 let lowerD = 0.0, upperD = calculateMaximumDerivative(cacheValues);
-                for (let it = 0; it < 10; ++it) {
+                for (let it = 0; it < 16; ++it) {
                     let middleD = (lowerD + upperD) / 2.0;
-                    if (canHaveDerivative(cacheValues, middleD)) {
+                    if (canHaveDerivative(cacheValues, middleD))
                         upperD = middleD;
-                        break;
-                    }
                     else
                         lowerD = middleD;
                 }
