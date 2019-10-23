@@ -139,7 +139,7 @@ Interpolation2D.prototype.draw = function() {
     ctx.fillRect(0, 0, width, height);
 
     this.drawGrid();
-    this.drawFunction(this.data.function);
+    this.drawFunction(this.data.function, '#f07050');
     this.drawPoints();
 };
 
@@ -233,7 +233,7 @@ Interpolation2D.prototype.drawPoints = function() {
     ctx.stroke();
 };
 
-Interpolation2D.prototype.drawFunction = function(func) {
+Interpolation2D.prototype.drawFunction = function(func, color) {
     let ctx = this.context;
     let width = this.canvas.width / this.dpi;
     let height = this.canvas.height / this.dpi;
@@ -264,7 +264,7 @@ Interpolation2D.prototype.drawFunction = function(func) {
     }
 
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#f07050';
+    ctx.strokeStyle = color;
     ctx.beginPath();
     ctx.moveTo(
         points[0].x * this.segmentSize + this.padding,
