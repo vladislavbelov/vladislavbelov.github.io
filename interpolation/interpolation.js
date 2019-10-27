@@ -394,7 +394,7 @@ window.onload = function() {
             'a = (y_2 - y_1 - k_1) - b \\\\' +
             'b = 3 \\cdot (y2 - y1 - k_1) + k1 - k2 \\\\' +
             'c = k_1 \\\\' +
-            'c = y_1 \\\\' +
+            'd = y_1 \\\\' +
             'f(y_0, y_1, y_2, y_3, x) = a \\cdot x^3 + b \\cdot x^2 + c \\cdot x + d' +
             '\\end{align}',
         'function': function(values, index, x) {
